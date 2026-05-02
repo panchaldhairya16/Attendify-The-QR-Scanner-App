@@ -55,6 +55,16 @@ header{display:flex;align-items:center;justify-content:space-between;padding:14p
 .btn-csv:hover{background:rgba(34,197,94,.22)}
 .hidden{display:none!important}
 
+.btn-clear {
+  background: #ef4444;
+  color: #fff;
+  border: none;
+}
+
+.btn-clear:hover {
+  background: #dc2626;
+}
+
 #scanWrap{width:100%;max-width:320px;border-radius:14px;overflow:hidden;border:1px solid var(--border);position:relative;transition:border-color .3s}
 #qr-reader{width:100%!important}
 #qr-reader video{width:100%!important}
@@ -246,6 +256,7 @@ tbody td{padding:12px 14px;vertical-align:middle}
     <div class="th-row">
       <h2>Attendance Log <span class="cbadge" id="cbadge">0</span></h2>
       <button class="btn btn-csv" onclick="exportCSV()">⬇️ Download CSV</button>
+       <button class="btn btn-clear" onclick="clearAllData()">Clear</button>
     </div>
     <div class="tscroll">
       <table>
