@@ -607,13 +607,32 @@ function loadSavedRecords() {
 
 
 // ── Expose functions to global scope for onclick handlers ──
-  window.switchTab = switchTab;
+function clearAllData() {
+  if (!confirm("Clear all attendance data?")) return;
+
+  // clear array
+  records = [];
+
+  // clear storage
+  localStorage.removeItem(STORAGE_KEY);
+
+  // clear UI
+  document.getElementById('tbody').innerHTML = '';
+  document.getElementById('cbadge').textContent = '0';
+  document.getElementById('empty').style.display = 'block';
+
+  toast('Data cleared', 'ok');
+} 
+
+
+window.switchTab = switchTab;
   window.showCamErr = showCamErr;
   window.startScan = startScan;
   window.stopScan = stopScan;
   window.addManual = addManual;
   window.addDemo = addDemo;
   window.exportCSV = exportCSV;
+  window.clearAllData = clearAllData;
 } // end initApp
 document.addEventListener('DOMContentLoaded', initApp);
 </script>
