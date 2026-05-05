@@ -73,6 +73,17 @@ header{display:flex;align-items:center;justify-content:space-between;padding:14p
 #qr-reader__dashboard button{background:var(--grad)!important;border:none!important;border-radius:8px!important;color:#fff!important;cursor:pointer!important;padding:7px 14px!important;font-size:.82rem!important;margin:4px!important}
 #qr-reader__dashboard_section_swaplink,#qr-reader__status_span,#qr-reader__header_message{display:none!important}
 #qr-reader__filescan_input{color:var(--t2)!important}
+.file-drop-zone{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:220px;border:2px dashed rgba(255,255,255,.12);border-radius:18px;padding:24px;cursor:pointer;transition:all .2s;text-align:center;color:var(--t2);background:rgba(255,255,255,.02)}
+.file-drop-zone:hover,.file-drop-zone.dragover{border-color:rgba(59,130,246,.55);background:rgba(59,130,246,.05)}
+.file-drop-zone strong{font-size:1rem;color:var(--t1);margin-bottom:8px}
+.file-drop-zone span{font-size:.82rem;color:var(--t3)}
+#qrPreview{width:100%;max-width:340px;border-radius:14px;border:1px solid rgba(255,255,255,.08);margin-top:18px;object-fit:contain;display:block}
+#fileStatus{margin-top:14px;padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,.1);color:var(--t2);background:rgba(255,255,255,.03);font-size:.88rem;text-align:center;min-height:52px;display:flex;align-items:center;justify-content:center}
+#fileStatus.success{border-color:rgba(34,197,94,.25);background:rgba(34,197,94,.08);color:#86efac}
+#fileStatus.error{border-color:rgba(239,68,68,.25);background:rgba(239,68,68,.08);color:#fca5a5}
+#fileStatus.info{border-color:rgba(99,102,241,.25);background:rgba(99,102,241,.08);color:#a5b4fc}
+.file-action-row{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:16px}
+.btn-secondary{background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--t1)}
 .corners{position:absolute;inset:0;pointer-events:none;z-index:3}
 .corners::before,.corners::after{content:'';position:absolute;width:30px;height:30px;border-color:#3b82f6;border-style:solid;border-width:3px}
 .corners::before{top:12px;left:12px;border-right:none;border-bottom:none;border-radius:3px 0 0 0}
@@ -390,43 +401,179 @@ async function stopScan() {
 
 // ── File/Image Scanner ─────────────────────────
 function initFileScanner() {
+  const container = document.getElementById('qr-file-reader');
+  if (!container) return;
   if (fileScanner) return;
-  fileScanner = new Html5Qrcode('qr-file-reader');
-  Html5Qrcode.getCameras().then(() => {}).catch(() => {});
-  document.getElementById('qr-file-reader').innerHTML = '';
-  const wrap = document.getElementById('qr-file-reader');
 
-  const label = document.createElement('label');
-  label.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:12px;padding:30px 20px;border:2px dashed rgba(255,255,255,.12);border-radius:14px;cursor:pointer;color:#94a3b8;font-size:.85rem;width:100%;max-width:340px;transition:border-color .2s';
-  label.innerHTML = '<div style="font-size:2.5rem;opacity:.5">🖼️</div><span>Click to upload QR image</span><span style="font-size:.75rem;color:#475569">PNG, JPG, GIF supported</span>';
-  label.onmouseenter = () => label.style.borderColor = 'rgba(99,102,241,.4)';
-  label.onmouseleave = () => label.style.borderColor = 'rgba(255,255,255,.12)';
+  container.innerHTML = '';
+  container.classList.add('file-scan-container');
 
-  const input = document.createElement('input');
-  input.type = 'file'; input.accept = 'image/*'; input.style.display = 'none';
-  input.onchange = e => {
-    const file = e.target.files[0]; if (!file) return;
-    label.innerHTML = '<div style="font-size:2rem;opacity:.5">⏳</div><span>Scanning…</span>';
-    new Html5Qrcode('_tmp_qr').then ? null : null;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      Html5Qrcode.scanFile(file, true)
-        .then(raw => {
-          onQR(raw);
-          label.innerHTML = '<div style="font-size:2.5rem;opacity:.5">🖼️</div><span>Click to upload another QR image</span><span style="font-size:.75rem;color:#475569">PNG, JPG, GIF supported</span>';
-          input.value = '';
-        })
-        .catch(() => {
-          toast('Could not read QR from image. Try a clearer photo.','err');
-          label.innerHTML = '<div style="font-size:2.5rem;opacity:.5">🖼️</div><span>Click to upload QR image</span><span style="font-size:.75rem;color:#475569">PNG, JPG, GIF supported</span>';
-          input.value = '';
-        });
-    };
-    reader.readAsDataURL(file);
+  const dropZone = document.createElement('div');
+  dropZone.className = 'file-drop-zone';
+  dropZone.innerHTML = '<div class="ph-icon">🖼️</div><strong>Click or drop an image here</strong><span>PNG, JPG, JPEG supported</span>';
+
+  const preview = document.createElement('img');
+  preview.id = 'qrPreview';
+  preview.className = 'hidden';
+  preview.alt = 'Selected QR image preview';
+
+  const status = document.createElement('div');
+  status.id = 'fileStatus';
+  status.className = 'info';
+  status.textContent = 'Drop an image or click to upload and scan it automatically.';
+
+  const actionRow = document.createElement('div');
+  actionRow.className = 'file-action-row';
+
+  const uploadButton = document.createElement('button');
+  uploadButton.type = 'button';
+  uploadButton.className = 'btn btn-p';
+  uploadButton.textContent = 'Upload image';
+
+  const retryButton = document.createElement('button');
+  retryButton.type = 'button';
+  retryButton.className = 'btn btn-secondary hidden';
+  retryButton.textContent = 'Upload another image';
+
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.accept = 'image/png,image/jpeg';
+  fileInput.style.display = 'none';
+
+  const scannerTarget = document.createElement('div');
+  scannerTarget.id = 'qr-file-reader-instance';
+  scannerTarget.style.display = 'none';
+
+  let currentUrl = null;
+  let isScanningFile = false;
+
+  const updateStatus = (message, type = 'info') => {
+    status.textContent = message;
+    status.className = type;
   };
-  label.appendChild(input);
-  label.onclick = () => input.click();
-  wrap.appendChild(label);
+
+  const resetFileInput = () => {
+    if (currentUrl) {
+      URL.revokeObjectURL(currentUrl);
+      currentUrl = null;
+    }
+    fileInput.value = '';
+    preview.src = '';
+    preview.classList.add('hidden');
+    retryButton.classList.add('hidden');
+  };
+
+  const handleScanResult = decodedText => {
+    updateStatus('✔ QR Detected — processing…', 'success');
+    toast('QR Detected! Processing attendance…', 'ok');
+    onQR(decodedText);
+    retryButton.classList.remove('hidden');
+    isScanningFile = false;
+  };
+
+  const handleScanError = errorMessage => {
+    console.warn('Image scan error:', errorMessage);
+    updateStatus('❌ No QR found. Try a clearer image or another photo.', 'error');
+    toast('No QR found. Try a clearer image.', 'err');
+    retryButton.classList.remove('hidden');
+    isScanningFile = false;
+  };
+
+  const scanImageFile = async file => {
+    if (isScanningFile) return;
+    if (!file) return;
+
+    if (!/^image\/(png|jpeg)$/i.test(file.type)) {
+      updateStatus('Invalid file type. Please use PNG or JPG/JPEG.', 'error');
+      toast('Only PNG and JPG/JPEG files are supported.', 'err');
+      resetFileInput();
+      return;
+    }
+
+    if (file.size === 0) {
+      updateStatus('Invalid file. Please choose a valid image.', 'error');
+      toast('This file appears to be empty.', 'err');
+      resetFileInput();
+      return;
+    }
+
+    isScanningFile = true;
+    updateStatus('Scanning image…', 'info');
+    retryButton.classList.add('hidden');
+
+    if (currentUrl) {
+      URL.revokeObjectURL(currentUrl);
+      currentUrl = null;
+    }
+
+    currentUrl = URL.createObjectURL(file);
+    preview.src = currentUrl;
+    preview.onload = () => preview.classList.remove('hidden');
+    preview.onerror = () => {
+      updateStatus('Could not preview the selected image.', 'error');
+      toast('Image preview failed. Try another file.', 'err');
+      resetFileInput();
+      isScanningFile = false;
+    };
+
+    const maxAttempts = 2;
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const decodedText = await fileScanner.scanFile(file, true);
+        handleScanResult(decodedText);
+        return;
+      } catch (scanError) {
+        lastError = scanError;
+        if (attempt < maxAttempts) {
+          updateStatus('Retrying scan…', 'info');
+          await new Promise(resolve => setTimeout(resolve, 300));
+          continue;
+        }
+      }
+    }
+
+    handleScanError(lastError || 'Scan failed');
+  };
+
+  const processFile = file => {
+    if (!file) return;
+    scanImageFile(file);
+  };
+
+  uploadButton.onclick = () => fileInput.click();
+  retryButton.onclick = () => fileInput.click();
+
+  fileInput.onchange = e => {
+    const file = e.target.files[0];
+    processFile(file);
+  };
+
+  dropZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropZone.classList.add('dragover');
+  });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    processFile(file);
+  });
+
+  dropZone.addEventListener('click', () => fileInput.click());
+
+  container.appendChild(dropZone);
+  container.appendChild(preview);
+  container.appendChild(status);
+  actionRow.appendChild(uploadButton);
+  actionRow.appendChild(retryButton);
+  container.appendChild(actionRow);
+  container.appendChild(fileInput);
+  container.appendChild(scannerTarget);
+
+  fileScanner = new Html5Qrcode('qr-file-reader-instance');
 }
 
 // ── QR Parse & Add ─────────────────────────────
